@@ -1,0 +1,70 @@
+#!/bin/bash
+# Minecraft Watchdog Script
+# Written by Cole Seeley - 2017-07-08
+#dragonfly14.asuscomm.com
+ 
+runMinecraft() {
+screen -dmS ubuntu java -Xmx3072M -Xms3072M -jar minecraft_server.1.12.jar nogui
+}
+ 
+runRestart() {
+### SAVE All
+status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
+commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+if [[ "$commandStatus" != "0" ]] ; then
+  sleep 30s
+  status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
+  commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+### SORRY SERVER IS BORKED FOR GOOD ###
+  if [[ "$commandStatus" != "0" ]] ; then
+    kill $minePID
+  fi
+fi
+sleep 15s
+### Stop command
+status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/stop^M"; echo $?)
+commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+if [[ "$commandStatus" != "0" ]] ; then
+  sleep 30s
+  status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
+  commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+### SORRY SERVER IS BORKED FOR GOOD ###
+  if [[ "$commandStatus" != "0" ]] ; then
+    kill $minePID
+  fi
+fi
+runMinecraft
+}
+ 
+ 
+### DO SOME WORK NOW ###
+ 
+### Does Minecraft have a port assigned
+portenum=$(cat ./server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
+if [ -z $portenum ] ; then
+  echo "No Minecraft!"
+  exit
+fi
+ 
+### Is Process running, and what is PID?
+minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
+if [ -z $minePID ] ; then
+  runMinecraft
+  sleep 45s
+fi
+ 
+### Is minecraft listening
+listening=$(netstat -l | grep "$portenum" | awk '{ print $1 }')
+if [ -z $listening ] ; then
+  runRestart
+  sleep 45s
+fi
+ 
+### Is minecraft responding
+hearing=$(nc -w 2 -z 127.0.0.1 $portenum; echo $?)
+if [[ "$hearing" != "0" ]] ; then
+  runRestart
+  sleep 45s
+fi
+### save because reasons
+status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
