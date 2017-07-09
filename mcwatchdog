@@ -124,7 +124,7 @@ runRestart() {
 ### DO SOME WORK NOW ###
  
 ### Does Minecraft have a port assigned
-portenum=$(cat ./server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
+portenum=$(cat $MC_DIRECTORY/server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
 if [ -z $portenum ] ; then
   echo "No Minecraft!"
   exit
@@ -150,5 +150,7 @@ if [[ "$hearing" != "0" ]] ; then
   runRestart
   sleep 45s
 fi
+
 ### save because reasons
-status=$(timeout 30 screen -S ${USER} -p 0 -X stuff "/save-all $(printf \\r)"; echo $?)
+mc_cmd_safe "save-all"
+sleep 15s
