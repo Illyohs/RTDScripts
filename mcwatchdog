@@ -2,7 +2,7 @@
 # Minecraft Watchdog Script
 # Written by Cole Seeley - 2017-07-08
 # Contributor Anthony Anderson - 2017-07-08
-#dragonfly14.asuscomm.com
+#
  
 MC_VERSION=1.10.2
 FORGE_VERSION=12.18.3.2316
@@ -84,33 +84,40 @@ stopServer() {
 	mc_cmd "stop"
 }
 
+mc_cmd_unsafe() {
+	status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+	commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+	if [[ "$commandStatus" != "0" ]] ; then
+		sleep 30s
+		status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+		commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+  		if [[ "$commandStatus" != "0" ]] ; then
+			kill $minePID
+  		fi
+	fi
+}
+
+mc_cmd_safe() {
+	status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+	commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+	if [[ "$commandStatus" != "0" ]] ; then
+		sleep 30s
+		status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+		commandStatus=$(echo $status | sed 's/[^0-9]*//g')
+  		if [[ "$commandStatus" != "0" ]] ; then
+			#kill $minePID
+			echo "server fail"
+  		fi
+	fi
+}
+
 runRestart() {
-### SAVE All
-status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
-commandStatus=$(echo $status | sed 's/[^0-9]*//g')
-if [[ "$commandStatus" != "0" ]] ; then
-  sleep 30s
-  status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
-  commandStatus=$(echo $status | sed 's/[^0-9]*//g')
-### SORRY SERVER IS BORKED FOR GOOD ###
-  if [[ "$commandStatus" != "0" ]] ; then
-    kill $minePID
-  fi
-fi
-sleep 15s
-### Stop command
-status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/stop^M"; echo $?)
-commandStatus=$(echo $status | sed 's/[^0-9]*//g')
-if [[ "$commandStatus" != "0" ]] ; then
-  sleep 30s
-  status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
-  commandStatus=$(echo $status | sed 's/[^0-9]*//g')
-### SORRY SERVER IS BORKED FOR GOOD ###
-  if [[ "$commandStatus" != "0" ]] ; then
-    kill $minePID
-  fi
-fi
-runMinecraft
+  ### SAVE All
+	mc_cmd_safe "save-all"
+	sleep 15s
+  ### Stop command
+	mc_cmd_unsafe "stop"
+	startServer
 }
  
  
@@ -126,7 +133,7 @@ fi
 ### Is Process running, and what is PID?
 minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
 if [ -z $minePID ] ; then
-  runMinecraft
+  startServer
   sleep 45s
 fi
  
@@ -144,4 +151,4 @@ if [[ "$hearing" != "0" ]] ; then
   sleep 45s
 fi
 ### save because reasons
-status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
+status=$(timeout 30 screen -S ${USER} -p 0 -X stuff "/save-all $(printf \\r)"; echo $?)
