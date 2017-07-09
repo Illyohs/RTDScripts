@@ -1,12 +1,89 @@
 #!/bin/bash
 # Minecraft Watchdog Script
 # Written by Cole Seeley - 2017-07-08
+# Contributor Anthony Anderson - 2017-07-08
 #dragonfly14.asuscomm.com
  
-runMinecraft() {
-screen -dmS ubuntu java -Xmx3072M -Xms3072M -jar minecraft_server.1.12.jar nogui
+MC_VERSION=1.10.2
+FORGE_VERSION=12.18.3.2316
+RAM_MIN=8G
+RAM_MAX=8G
+JAVA_HOME="/usr/lib/jvm/default-runtime"
+JEXEC="${JAVA_HOME}/bin/java -jar -Xms${RAM_MIN} -Xmx${RAM_MAX}"
+PORT=$(grep server-port server.properties | cut -d '=' -f 2)
+USER=$(whoami)
+WORLD_NAME="world"
+MC_DIRECTORY="/home/${USER}/${WORLD_NAME}"
+BACKUP_DIRECTORY="/home/${USER}/backups/${WORLD_NAME}/$(date +%b-%d-%Y-)"
+
+downloadForge() {
+	cleanDir
+	wget "http://files.minecraftforge.net/maven/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar"
 }
- 
+
+cleanDir() {
+	rm -r *.jar
+	rm -r ./libraries
+	rm *.json
+}
+
+installForge() {
+	${JEXEC} forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar --installServer
+	rm forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar
+}
+
+startServer() {
+	screen -dmS mc$PORT $JEXEC forge-${MC_VERSION}-${FORGE_VERSION}-universal.jar nogui
+
+}
+
+mc_cmd() {
+	screen -p mc$PORT -X stuff "$@$(printf \\r)"
+}
+
+backup_mc() {
+	##RUN CHECK BLOCK
+	if [[ ! -e $BACKUP_DIRECTORY ]]; then
+		mkdir -p $BACKUP_DIRECTORY
+	elif [[ ! -d $BACKUP_DIRECTORY ]]; then
+		echo "$BACKUP_DIRECTORY exists"
+	fi
+
+	mc_cmd "say Server backing up now going into read only mode."
+	mc_cmd "save-off"
+	mc_cmd "save-all"
+	sync
+
+	sleep 5
+
+	tar -cJf $BACKUP_DIRECTORY/$WORLD_NAME-$(date +%b-%d-%Y-%H:%M).tar.xz $MC_DIRECTORY/$WORLD_NAME $MC_DIRECTORY/mods $MC_DIRECTORY/config $MC_DIRECTORY/ops.json $MC_DIRECTORY/whitelist.json
+
+	sleep 10
+
+	mc_cmd "save-on"
+	mc_cmd "say Server backup complete now going into read write mode."
+
+}
+
+stopServer() {
+	backup_mc
+	mc_cmd "say Server shutting down in 60 seconds!"
+	sleep 15
+	mc_cmd "say Server shutting down in 45 seconds!"
+	sleep 15
+	mc_cmd "say Server shutting down in 30 seconds!"
+	sleep 15
+	mc_cmd "say Server shutting down in 15 seconds!"
+	sleep 5
+	mc_cmd "say Server shutting down in 10 seconds!"
+	mc_cmd "save-all"
+	sleep 5
+	mc_cmd "say Server shutting down in 5 seconds!"
+	sleep 5
+	mc_cmd "say Server shutting down!"
+	mc_cmd "stop"
+}
+
 runRestart() {
 ### SAVE All
 status=$(timeout 30 screen -S ubuntu -p 0 -X stuff "/save-all^M"; echo $?)
