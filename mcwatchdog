@@ -10,35 +10,36 @@ RAM_MIN=8G
 RAM_MAX=8G
 JAVA_HOME="/usr/lib/jvm/default-runtime"
 JEXEC="${JAVA_HOME}/bin/java -jar -Xms${RAM_MIN} -Xmx${RAM_MAX}"
-PORT=$(grep server-port server.properties | cut -d '=' -f 2)
 USER=$(whoami)
 WORLD_NAME="world"
+PORT=$(cat $MC_DIRECTORY/server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
 MC_DIRECTORY="/home/${USER}/${WORLD_NAME}"
 BACKUP_DIRECTORY="/home/${USER}/backups/${WORLD_NAME}/$(date +%b-%d-%Y-)"
 
 downloadForge() {
+
+	if [[ ! -e $MC_DIRECTORY ]]; then
+		mkdir -p $MC_DIRECTORY
+	fi
+
 	cleanDir
-	wget "http://files.minecraftforge.net/maven/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar"
+	wget "http://files.minecraftforge.net/maven/net/minecraftforge/forge/${MC_VERSION}-${FORGE_VERSION}/forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar" -P ${MC_DIRECTORY}
 }
 
 cleanDir() {
-	rm -r *.jar
-	rm -r ./libraries
-	rm *.json
+	rm ${MC_DIRECTORY}/*.jar
+	rm -r ${MC_DIRECTORY}/libraries
 }
 
 installForge() {
-	${JEXEC} forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar --installServer
-	rm forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar
+	downloadForge
+	cd ${MC_DIRECTORY} && ${JEXEC} forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar --installServer
+	rm ${MC_DIRECTORY}/forge-${MC_VERSION}-${FORGE_VERSION}-installer.jar
 }
 
 startServer() {
-	screen -dmS mc$PORT $JEXEC forge-${MC_VERSION}-${FORGE_VERSION}-universal.jar nogui
+	cd $MC_DIRECTORY && screen -dmS mc$PORT $JEXEC ${MC_DIRECTORY}/forge-${MC_VERSION}-${FORGE_VERSION}-universal.jar nogui
 
-}
-
-mc_cmd() {
-	screen -p mc$PORT -X stuff "$@$(printf \\r)"
 }
 
 backup_mc() {
@@ -49,9 +50,9 @@ backup_mc() {
 		echo "$BACKUP_DIRECTORY exists"
 	fi
 
-	mc_cmd "say Server backing up now going into read only mode."
-	mc_cmd "save-off"
-	mc_cmd "save-all"
+	mc_cmd_safe "say Server backing up now going into read only mode."
+	mc_cmd_safe "save-off"
+	mc_cmd_safe "save-all"
 	sync
 
 	sleep 5
@@ -60,28 +61,28 @@ backup_mc() {
 
 	sleep 10
 
-	mc_cmd "save-on"
-	mc_cmd "say Server backup complete now going into read write mode."
+	mc_cmd_safe "save-on"
+	mc_cmd_safe "say Server backup complete now going into read write mode."
 
 }
 
 stopServer() {
 	backup_mc
-	mc_cmd "say Server shutting down in 60 seconds!"
+	mc_cmd_safe "say Server shutting down in 60 seconds! Server now going into read only mode..."
+	mc_cmd_safe "save-off"
 	sleep 15
-	mc_cmd "say Server shutting down in 45 seconds!"
+	mc_cmd_safe "say Server shutting down in 45 seconds!"
 	sleep 15
-	mc_cmd "say Server shutting down in 30 seconds!"
+	mc_cmd_safe "say Server shutting down in 30 seconds!"
 	sleep 15
-	mc_cmd "say Server shutting down in 15 seconds!"
+	mc_cmd_safe "say Server shutting down in 15 seconds!"
 	sleep 5
-	mc_cmd "say Server shutting down in 10 seconds!"
-	mc_cmd "save-all"
+	mc_cmd_safe "say Server shutting down in 10 seconds!"
 	sleep 5
-	mc_cmd "say Server shutting down in 5 seconds!"
+	mc_cmd_safe "say Server shutting down in 5 seconds!"
 	sleep 5
-	mc_cmd "say Server shutting down!"
-	mc_cmd "stop"
+	mc_cmd_safe "say Server shutting down!"
+	mc_cmd_unsafe "stop"
 }
 
 mc_cmd_unsafe() {
@@ -112,45 +113,65 @@ mc_cmd_safe() {
 }
 
 runRestart() {
-  ### SAVE All
-	mc_cmd_safe "save-all"
-	sleep 15s
-  ### Stop command
-	mc_cmd_unsafe "stop"
+	stopServer
 	startServer
 }
+
+case "$1" in
+	start)
+		startServer
+	;;
+	stop)
+		stopServer
+	;;
+	backup)
+		backup_mc
+	;;
+	restart)
+		runRestart
+	;;
+        install)
+		installForge
+	;;
+	*)
+	echo "Commmands {start|stop|backup|restart|install}"
+	exit 1
+	;;
+esac
+	
+
  
  
 ### DO SOME WORK NOW ###
  
 ### Does Minecraft have a port assigned
-portenum=$(cat $MC_DIRECTORY/server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
-if [ -z $portenum ] ; then
-  echo "No Minecraft!"
-  exit
-fi
- 
-### Is Process running, and what is PID?
-minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
-if [ -z $minePID ] ; then
-  startServer
-  sleep 45s
-fi
- 
-### Is minecraft listening
-listening=$(netstat -l | grep "$portenum" | awk '{ print $1 }')
-if [ -z $listening ] ; then
-  runRestart
-  sleep 45s
-fi
- 
-### Is minecraft responding
-hearing=$(nc -w 2 -z 127.0.0.1 $portenum; echo $?)
-if [[ "$hearing" != "0" ]] ; then
-  runRestart
-  sleep 45s
-fi
-
-### save because reasons
-mc_cmd_safe "save-all"
-sleep 15s
+#portenum=$(cat $MC_DIRECTORY/server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
+#if [ -z $portenum ] ; then
+#  echo "No Minecraft!"
+#  exit
+#fi
+# 
+#### Is Process running, and what is PID?
+#minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
+#if [ -z $minePID ] ; then
+#  startServer
+#  sleep 45s
+#fi
+# 
+#### Is minecraft listening
+#listening=$(netstat -l | grep "$portenum" | awk '{ print $1 }')
+#if [ -z $listening ] ; then
+#  runRestart
+#  sleep 45s
+#fi
+# 
+#### Is minecraft responding
+#hearing=$(nc -w 2 -z 127.0.0.1 $portenum; echo $?)
+#if [[ "$hearing" != "0" ]] ; then
+#  runRestart
+#  sleep 45s
+#fi
+#
+#### save because reasons
+#mc_cmd_safe "save-all"
+#sleep 15s
