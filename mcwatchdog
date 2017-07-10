@@ -12,9 +12,9 @@ JAVA_HOME="/usr/lib/jvm/default-runtime"
 JEXEC="${JAVA_HOME}/bin/java -jar -Xms${RAM_MIN} -Xmx${RAM_MAX}"
 USER=$(whoami)
 WORLD_NAME="world"
-PORT=$(cat $MC_DIRECTORY/server.properties | grep "server-port" | awk -F "=" '{ print $2 }')
+PORT=25565
 MC_DIRECTORY="/home/${USER}/${WORLD_NAME}"
-BACKUP_DIRECTORY="/home/${USER}/backups/${WORLD_NAME}/$(date +%b-%d-%Y-)"
+BACKUP_DIRECTORY="/home/${USER}/backups/${WORLD_NAME}/$(date +%b-%d-%Y)"
 
 downloadForge() {
 
@@ -39,7 +39,6 @@ installForge() {
 
 startServer() {
 	cd $MC_DIRECTORY && screen -dmS mc$PORT $JEXEC ${MC_DIRECTORY}/forge-${MC_VERSION}-${FORGE_VERSION}-universal.jar nogui
-
 }
 
 backup_mc() {
@@ -67,7 +66,7 @@ backup_mc() {
 }
 
 stopServer() {
-	backup_mc
+	#backup_mc
 	mc_cmd_safe "say Server shutting down in 60 seconds! Server now going into read only mode..."
 	mc_cmd_safe "save-off"
 	sleep 15
@@ -86,11 +85,11 @@ stopServer() {
 }
 
 mc_cmd_unsafe() {
-	status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+	status=$(timeout 30 screen -S mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
 	commandStatus=$(echo $status | sed 's/[^0-9]*//g')
 	if [[ "$commandStatus" != "0" ]] ; then
 		sleep 30s
-		status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+		status=$(timeout 30 screen -S mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
 		commandStatus=$(echo $status | sed 's/[^0-9]*//g')
   		if [[ "$commandStatus" != "0" ]] ; then
 			kill $minePID
@@ -99,11 +98,11 @@ mc_cmd_unsafe() {
 }
 
 mc_cmd_safe() {
-	status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+	status=$(timeout 30 screen -S mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
 	commandStatus=$(echo $status | sed 's/[^0-9]*//g')
 	if [[ "$commandStatus" != "0" ]] ; then
 		sleep 30s
-		status=$(timeout 30 screen -S ${USER} -p mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
+		status=$(timeout 30 screen -S mc$PORT -X stuff "$@$(printf \\r)"; echo $?)
 		commandStatus=$(echo $status | sed 's/[^0-9]*//g')
   		if [[ "$commandStatus" != "0" ]] ; then
 			#kill $minePID
@@ -152,11 +151,11 @@ esac
 #fi
 # 
 #### Is Process running, and what is PID?
-#minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
-#if [ -z $minePID ] ; then
-#  startServer
-#  sleep 45s
-#fi
+minePID=$(ps aux | grep "java" | grep -v "SCREEN" | grep -v "grep" | xargs | awk '{ print $2 }')
+if [ -z $minePID ] ; then
+  startServer
+  sleep 45s
+fi
 # 
 #### Is minecraft listening
 #listening=$(netstat -l | grep "$portenum" | awk '{ print $1 }')
